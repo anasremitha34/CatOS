@@ -1,0 +1,650 @@
+<!--
+  PROBLEM: The uploaded file is truncated. It stops mid-word at line 565
+  ("const savedTheme = localStorag"), so the inline <script> has a syntax error.
+  Because the script fails to parse, none of its functions exist: the boot
+  sequence never runs, tapping the boot screen does nothing, and the file is
+  missing its closing </script>, </body> and </html> tags.
+
+  FIX: restored loadSettings(), added the missing loadNote(), saveNote() and
+  handleTerm() functions, closed the tags, and guarded runBoot() so it cannot
+  run three times in parallel (it was triggered by DOMContentLoaded, load and a
+  50ms timeout).
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CatOS 1.00 Build 150</title>
+    <style>
+        :root {
+            --bg-color: #008080;
+            --win-gray: #c0c0c0;
+            --win-light: #ffffff;
+            --win-blue: #000080;
+            --font-mono: 'Courier New', Courier, monospace;
+            --font-sans: 'Tahoma', 'Arial', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-sans);
+            background-color: #000;
+            touch-action: none;
+        }
+
+        /* --- BOOT SCREEN --- */
+        #boot-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .boot-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #fff;
+            padding: 12px 18px;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .boot-logo-text {
+            color: #000;
+            font-family: var(--font-sans);
+            text-align: left;
+        }
+
+        .boot-logo-text h1 {
+            font-size: 22px;
+            margin: 0;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .boot-logo-text p {
+            font-size: 15px;
+            margin: 2px 0 0 0;
+            font-weight: bold;
+            color: #228b22;
+        }
+
+        .boot-line { margin: 3px 0; font-size: 13px; text-align: left; width: 100%; max-width: 340px; }
+        .tap-hint { color: #ff0; font-size: 11px; margin-top: 15px; animation: blink 1s infinite; }
+
+        @keyframes blink { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
+        /* --- DESKTOP --- */
+        #desktop {
+            display: none;
+            width: 100%;
+            height: calc(100% - 40px);
+            background-color: var(--bg-color);
+            position: relative;
+            padding: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        .icon {
+            width: 80px;
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            text-shadow: 1px 1px #000;
+        }
+
+        .icon span {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* --- WINDOWS --- */
+        .window {
+            position: absolute;
+            top: 25px;
+            left: 5%;
+            width: 90%;
+            max-width: 420px;
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .title-bar {
+            background: var(--win-blue);
+            color: white;
+            padding: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            touch-action: none;
+        }
+
+        .title-bar button {
+            background: var(--win-gray);
+            border: 1px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            width: 22px;
+            height: 22px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .window-body {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .retro-btn {
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            padding: 6px 12px;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .retro-btn:active {
+            border-color: #000 var(--win-light) var(--win-light) #000;
+        }
+
+        /* --- TERMINAL --- */
+        #terminal-output {
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            height: 150px;
+            padding: 6px;
+            overflow-y: auto;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .term-line {
+            display: flex;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 4px;
+            align-items: center;
+        }
+
+        #term-input {
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            flex-grow: 1;
+            outline: none;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* --- NOTEPAD --- */
+        #notepad-text {
+            width: 100%;
+            height: 140px;
+            resize: none;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            border: 2px inset var(--win-gray);
+            padding: 6px;
+            outline: none;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* --- SETTINGS APP --- */
+        .settings-section {
+            border: 2px inset var(--win-gray);
+            padding: 8px;
+            background: #fff;
+            margin-bottom: 6px;
+        }
+
+        .settings-section label {
+            font-size: 13px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .settings-section select {
+            width: 100%;
+            padding: 4px;
+            font-family: var(--font-sans);
+            font-size: 13px;
+        }
+
+        /* --- TASKBAR & START MENU --- */
+        #taskbar {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%; height: 40px;
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            display: none;
+            align-items: center;
+            padding: 0 8px;
+            justify-content: space-between;
+            z-index: 1000;
+        }
+
+        #start-btn {
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            padding: 4px 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #start-menu {
+            position: fixed;
+            bottom: 40px; left: 8px; width: 190px;
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        .start-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .start-item:hover {
+            background: var(--win-blue);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BOOT SCREEN WITH TAP-TO-SKIP -->
+    <div id="boot-screen" onclick="completeBoot()">
+        <div class="boot-logo-container">
+            <svg width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="20,35 10,5 40,25" fill="#cccccc" stroke="#000" stroke-width="3"/>
+                <polygon points="80,35 90,5 60,25" fill="#cccccc" stroke="#000" stroke-width="3"/>
+                <circle cx="50" cy="55" r="35" fill="#cccccc" stroke="#000" stroke-width="3"/>
+                <circle cx="38" cy="48" r="5" fill="#000"/>
+                <circle cx="62" cy="48" r="5" fill="#000"/>
+                <path d="M 43,62 Q 47,68 50,62 Q 53,68 57,62" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <div class="boot-logo-text">
+                <h1>CatOS 1.00</h1>
+                <p>Build 150</p>
+            </div>
+        </div>
+        <div id="boot-text-container" style="width: 100%; max-width: 340px;"></div>
+        <div class="tap-hint">[ Tap anywhere to enter system ]</div>
+    </div>
+
+    <!-- DESKTOP -->
+    <div id="desktop">
+        <div class="icon" onclick="openWindow('win-terminal')">
+            <span>💻</span>CatTerm
+        </div>
+        <div class="icon" onclick="openWindow('win-notepad')">
+            <span>📝</span>Scratchpad
+        </div>
+        <div class="icon" onclick="openWindow('win-settings')">
+            <span>⚙️</span>Settings
+        </div>
+        <div class="icon" onclick="openWindow('win-about')">
+            <span>🐱</span>About
+        </div>
+
+        <!-- TERMINAL WINDOW -->
+        <div class="window" id="win-terminal">
+            <div class="title-bar" onmousedown="bringToFront('win-terminal')" ontouchstart="bringToFront('win-terminal')">
+                <span>CatTerm - [Build 150]</span>
+                <button onclick="closeWindow('win-terminal')">X</button>
+            </div>
+            <div class="window-body">
+                <div id="terminal-output">
+                    CatOS Shell v1.00 (Build 150)<br>
+                    Type 'help' for commands, or 'settings' to customize.<br><br>
+                </div>
+                <div class="term-line">
+                    <span>C:\&gt;</span>
+                    <input type="text" id="term-input" autocomplete="off" onkeydown="handleTerm(event)">
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTEPAD WINDOW -->
+        <div class="window" id="win-notepad">
+            <div class="title-bar" onmousedown="bringToFront('win-notepad')" ontouchstart="bringToFront('win-notepad')">
+                <span>Scratchpad.txt</span>
+                <button onclick="closeWindow('win-notepad')">X</button>
+            </div>
+            <div class="window-body">
+                <textarea id="notepad-text" placeholder="Type your notes here..."></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <button class="retro-btn" onclick="saveNote()">💾 Save Note</button>
+                    <span id="save-status" style="font-size: 12px; color: #006400; font-weight: bold;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS WINDOW -->
+        <div class="window" id="win-settings" style="top: 45px;">
+            <div class="title-bar" onmousedown="bringToFront('win-settings')" ontouchstart="bringToFront('win-settings')">
+                <span>Control Panel - Settings</span>
+                <button onclick="closeWindow('win-settings')">X</button>
+            </div>
+            <div class="window-body">
+                <div class="settings-section">
+                    <label for="theme-select">🎨 Desktop Background Theme:</label>
+                    <select id="theme-select" onchange="applyTheme(this.value)">
+                        <option value="#008080">Classic Teal (Windows 95)</option>
+                        <option value="#111111">Midnight Dark</option>
+                        <option value="#800000">Laser Red</option>
+                        <option value="#4b0082">Sunset Purple</option>
+                        <option value="#3a6073">Steel Blue</option>
+                    </select>
+                </div>
+                <div class="settings-section">
+                    <label for="sound-select">🔊 System Sound Effects:</label>
+                    <select id="sound-select" onchange="saveSettings()">
+                        <option value="on">Enabled (Standard Beeps)</option>
+                        <option value="off">Muted</option>
+                    </select>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                    <button class="retro-btn" onclick="saveSettings(); alert('Settings saved successfully!')">💾 Apply Settings</button>
+                    <span id="settings-status" style="font-size: 12px; color: #006400; font-weight: bold;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABOUT WINDOW -->
+        <div class="window" id="win-about" style="top: 65px;">
+            <div class="title-bar" onmousedown="bringToFront('win-about')" ontouchstart="bringToFront('win-about')">
+                <span>System Properties</span>
+                <button onclick="closeWindow('win-about')">X</button>
+            </div>
+            <div class="window-body" style="text-align: center;">
+                <div style="font-size: 40px; margin: 5px;">🐱</div>
+                <strong>CatOS 1.00 (Build 150)</strong>
+                <p style="font-size: 13px;">Purr-formance Kernel v1.7<br>Inline Logo, Settings & Tap-to-Boot!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- START MENU -->
+    <div id="start-menu">
+        <div class="start-item" onclick="openWindow('win-terminal'); toggleStart();">💻 CatTerm</div>
+        <div class="start-item" onclick="openWindow('win-notepad'); toggleStart();">📝 Scratchpad</div>
+        <div class="start-item" onclick="openWindow('win-settings'); toggleStart();">⚙️ Settings</div>
+        <div class="start-item" onclick="openWindow('win-about'); toggleStart();">🐱 About CatOS</div>
+        <hr style="width: 90%; border: 1px inset var(--win-gray);">
+        <div class="start-item" onclick="toggleStart(); rebootSystem();">🔄 Reboot</div>
+    </div>
+
+    <!-- TASKBAR -->
+    <div id="taskbar">
+        <button id="start-btn" onclick="toggleStart()">🐱 Start</button>
+        <div id="clock" style="border: 2px inset var(--win-gray); padding: 3px 8px; font-size: 12px;">12:00 PM</div>
+    </div>
+
+    <script>
+        // --- AUDIO BEEPS ---
+        let audioCtx = null;
+        function playBeep(freq) {
+            try {
+                const soundPref = document.getElementById('sound-select');
+                if (soundPref && soundPref.value === 'off') return;
+
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (audioCtx) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.05);
+                }
+            } catch(e) {}
+        }
+
+        // --- BOOT SEQUENCE & REBOOT SYSTEM ---
+        const bootLines = [
+            "CAT-BIOS v1.70 (C) 2026 Feline Systems Inc.",
+            "Checking Catnip RAM... 640KB OK",
+            "Detecting Primary Master... Whiskers HDD 20MB",
+            "Loading CatOS 1.00 Build 150...",
+            "Mounting Persistent Settings & Storage... [OK]",
+            "Initializing GUI & Tap-to-Boot... [OK]"
+        ];
+
+        let lineIdx = 0;
+        let bootFinished = false;
+        let bootTimer = null;
+        let bootRunning = false;
+
+        function runBoot() {
+            if (bootFinished || bootRunning) return;
+            bootRunning = true;
+            
+            const bootScreen = document.getElementById('boot-screen');
+            const textContainer = document.getElementById('boot-text-container');
+            bootScreen.style.display = 'flex';
+            textContainer.innerHTML = '';
+            lineIdx = 0;
+
+            function nextLine() {
+                if (bootFinished) return;
+                if (lineIdx < bootLines.length) {
+                    const p = document.createElement('div');
+                    p.className = 'boot-line';
+                    p.textContent = bootLines[lineIdx];
+                    textContainer.appendChild(p);
+                    lineIdx++;
+                    bootTimer = setTimeout(nextLine, 35);
+                } else {
+                    bootTimer = setTimeout(completeBoot, 100);
+                }
+            }
+            nextLine();
+        }
+
+        function completeBoot() {
+            if (bootFinished) return;
+            bootFinished = true;
+            bootRunning = false;
+            if (bootTimer) clearTimeout(bootTimer);
+
+            const bootScreen = document.getElementById('boot-screen');
+            bootScreen.style.display = 'none';
+            document.getElementById('desktop').style.display = 'block';
+            document.getElementById('taskbar').style.display = 'flex';
+            loadSettings();
+            loadNote();
+            openWindow('win-terminal');
+        }
+
+        function rebootSystem() {
+            playBeep(300);
+            document.getElementById('desktop').style.display = 'none';
+            document.getElementById('taskbar').style.display = 'none';
+            document.querySelectorAll('.window').forEach(w => w.style.display = 'none');
+            bootFinished = false;
+            runBoot();
+        }
+
+        // Guaranteed execution triggers
+        window.addEventListener('DOMContentLoaded', runBoot);
+        window.addEventListener('load', runBoot);
+        setTimeout(runBoot, 50);
+
+        // --- WINDOW MANAGEMENT ---
+        let zIndexCounter = 10;
+
+        function openWindow(id) {
+            playBeep(600);
+            const win = document.getElementById(id);
+            win.style.display = 'flex';
+            bringToFront(id);
+        }
+
+        function closeWindow(id) {
+            playBeep(350);
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function bringToFront(id) {
+            document.getElementById(id).style.zIndex = ++zIndexCounter;
+        }
+
+        function toggleStart() {
+            playBeep(500);
+            const menu = document.getElementById('start-menu');
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        // --- SETTINGS & PERSISTENCE ---
+        function applyTheme(color) {
+            document.getElementById('desktop').style.backgroundColor = color;
+        }
+
+        function saveSettings() {
+            playBeep(700);
+            const theme = document.getElementById('theme-select').value;
+            const sound = document.getElementById('sound-select').value;
+            try {
+                localStorage.setItem('catos_theme', theme);
+                localStorage.setItem('catos_sound', sound);
+                applyTheme(theme);
+                const status = document.getElementById('settings-status');
+                status.textContent = "Saved!";
+                setTimeout(() => status.textContent = "", 2000);
+            } catch(e) {}
+        }
+
+        function loadSettings() {
+            try {
+                const savedTheme = localStorage.getItem('catos_theme');
+                const savedSound = localStorage.getItem('catos_sound');
+                if (savedTheme) {
+                    document.getElementById('theme-select').value = savedTheme;
+                    applyTheme(savedTheme);
+                }
+                if (savedSound) document.getElementById('sound-select').value = savedSound;
+            } catch(e) {}
+        }
+
+        // --- NOTEPAD PERSISTENCE ---
+        function loadNote() {
+            try {
+                const note = localStorage.getItem('catos_note');
+                if (note !== null) document.getElementById('notepad-text').value = note;
+            } catch(e) {}
+        }
+
+        function saveNote() {
+            playBeep(700);
+            try {
+                localStorage.setItem('catos_note', document.getElementById('notepad-text').value);
+                const status = document.getElementById('save-status');
+                status.textContent = 'Saved!';
+                setTimeout(() => status.textContent = '', 2000);
+            } catch(e) {}
+        }
+
+        // --- TERMINAL ---
+        function termPrint(text) {
+            const out = document.getElementById('terminal-output');
+            const line = document.createElement('div');
+            line.textContent = text;
+            out.appendChild(line);
+            out.scrollTop = out.scrollHeight;
+        }
+
+        function handleTerm(e) {
+            if (e.key !== 'Enter') return;
+            const input = document.getElementById('term-input');
+            const raw = input.value.trim();
+            const cmd = raw.toLowerCase();
+            input.value = '';
+            if (!raw) return;
+            termPrint('C:\\> ' + raw);
+
+            switch (cmd) {
+                case 'help':
+                    termPrint('Commands: help, about, settings, scratchpad, date, meow, clear, reboot');
+                    break;
+                case 'about': openWindow('win-about'); break;
+                case 'settings': openWindow('win-settings'); break;
+                case 'scratchpad': openWindow('win-notepad'); break;
+                case 'date': termPrint(new Date().toString()); break;
+                case 'meow': termPrint('Purr... Mrrrow!'); break;
+                case 'clear': document.getElementById('terminal-output').innerHTML = ''; break;
+                case 'reboot': rebootSystem(); break;
+                default: termPrint("'" + raw + "' is not recognized as an internal command.");
+            }
+        }
+
+        // --- CLOCK ---
+        function updateClock() {
+            document.getElementById('clock').textContent =
+                new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+        updateClock();
+        setInterval(updateClock, 15000);
+    </script>
+</body>
+</html>

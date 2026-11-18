@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CatOS 1.00 Build 110</title>
+    <style>
+        :root {
+            --bg-color: #008080; /* Classic Win95 Teal */
+            --win-gray: #c0c0c0;
+            --win-dark: #808080;
+            --win-light: #ffffff;
+            --win-blue: #000080;
+            --font-mono: 'Courier New', Courier, monospace;
+            --font-sans: 'Tahoma', 'Arial', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-sans);
+            background-color: #000;
+        }
+
+        /* --- BOOT SCREEN --- */
+        #boot-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .boot-line { margin: 4px 0; }
+        .cursor { display: inline-block; width: 10px; height: 18px; background: #0f0; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* --- DESKTOP --- */
+        #desktop {
+            display: none;
+            width: 100%;
+            height: calc(100% - 36px);
+            background-color: var(--bg-color);
+            position: relative;
+            padding: 15px;
+        }
+
+        .icon {
+            width: 75px;
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            text-shadow: 1px 1px 1px #000;
+        }
+
+        .icon-img {
+            font-size: 32px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .icon:active { opacity: 0.7; }
+
+        /* --- WINDOWS --- */
+        .window {
+            position: absolute;
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            border-left: 2px solid var(--win-light);
+            border-right: 2px solid #000;
+            border-bottom: 2px solid #000;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            min-width: 300px;
+            min-height: 200px;
+            display: none;
+            flex-direction: column;
+        }
+
+        .title-bar {
+            background: var(--win-blue);
+            color: white;
+            padding: 3px 6px;
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+        }
+
+        .title-bar-controls button {
+            background: var(--win-gray);
+            border-top: 1px solid var(--win-light);
+            border-left: 1px solid var(--win-light);
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            font-weight: bold;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            line-height: 12px;
+            padding: 0;
+        }
+
+        .window-body {
+            padding: 10px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- TERMINAL APP --- */
+        #terminal-output {
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: 8px;
+            height: 200px;
+            overflow-y: auto;
+            flex-grow: 1;
+            user-select: text;
+        }
+
+        .term-input-line {
+            display: flex;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 0 8px 8px 8px;
+        }
+
+        #term-input {
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            flex-grow: 1;
+            outline: none;
+            margin-left: 5px;
+        }
+
+        /* --- NOTEPAD APP --- */
+        #notepad-text {
+            width: 100%;
+            height: 200px;
+            resize: none;
+            font-family: var(--font-mono);
+            border: 2px inset var(--win-gray);
+            padding: 5px;
+            outline: none;
+        }
+
+        /* --- TASKBAR --- */
+        #taskbar {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%; height: 36px;
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            display: none;
+            align-items: center;
+            padding: 0 6px;
+            justify-content: space-between;
+            z-index: 1000;
+        }
+
+        #start-btn {
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            border-left: 2px solid var(--win-light);
+            border-right: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 3px 10px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #start-btn:active {
+            border-top: 2px solid #000;
+            border-left: 2px solid #000;
+            border-right: 2px solid var(--win-light);
+            border-bottom: 2px solid var(--win-light);
+        }
+
+        #clock {
+            border: 2px inset var(--win-gray);
+            padding: 3px 8px;
+            font-size: 12px;
+        }
+
+        #start-menu {
+            position: fixed;
+            bottom: 36px; left: 6px;
+            width: 180px;
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            border-left: 2px solid var(--win-light);
+            border-right: 2px solid #000;
+            border-bottom: 2px solid #000;
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        .start-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .start-item:hover {
+            background: var(--win-blue);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BOOT SEQUENCE -->
+    <div id="boot-screen"></div>
+
+    <!-- DESKTOP -->
+    <div id="desktop">
+        <div class="icon" ondblclick="openWindow('win-terminal')">
+            <span class="icon-img">💻</span>
+            CatTerm
+        </div>
+        <div class="icon" ondblclick="openWindow('win-notepad')">
+            <span class="icon-img">📝</span>
+            Scratchpad
+        </div>
+        <div class="icon" ondblclick="openWindow('win-about')">
+            <span class="icon-img">🐱</span>
+            About CatOS
+        </div>
+
+        <!-- TERMINAL WINDOW -->
+        <div class="window" id="win-terminal" style="top: 50px; left: 120px; width: 450px;">
+            <div class="title-bar" onmousedown="dragStart(event, 'win-terminal')">
+                <span>CatTerm - [Build 110]</span>
+                <div class="title-bar-controls">
+                    <button onclick="closeWindow('win-terminal')">X</button>
+                </div>
+            </div>
+            <div class="window-body" style="padding: 2px;">
+                <div id="terminal-output">
+                    CatOS Shell v1.00 (Build 110)<br>
+                    Type 'help' for available commands.<br><br>
+                </div>
+                <div class="term-input-line">
+                    <span>C:\CAT&gt;</span>
+                    <input type="text" id="term-input" autocomplete="off" onkeydown="handleTerminal(event)">
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTEPAD WINDOW -->
+        <div class="window" id="win-notepad" style="top: 90px; left: 200px; width: 350px;">
+            <div class="title-bar" onmousedown="dragStart(event, 'win-notepad')">
+                <span>Scratchpad.txt</span>
+                <div class="title-bar-controls">
+                    <button onclick="closeWindow('win-notepad')">X</button>
+                </div>
+            </div>
+            <div class="window-body">
+                <textarea id="notepad-text" placeholder="Type your feline thoughts here..."></textarea>
+            </div>
+        </div>
+
+        <!-- ABOUT WINDOW -->
+        <div class="window" id="win-about" style="top: 130px; left: 280px; width: 320px;">
+            <div class="title-bar" onmousedown="dragStart(event, 'win-about')">
+                <span>System Properties</span>
+                <div class="title-bar-controls">
+                    <button onclick="closeWindow('win-about')">X</button>
+                </div>
+            </div>
+            <div class="window-body" style="text-align: center;">
+                <div style="font-size: 48px; margin: 10px 0;">🐱</div>
+                <strong>CatOS 1.00 (Build 110)</strong>
+                <p style="font-size: 12px;">Purr-formance Kernel v1.0<br>Memory: 640K Catnip RAM (639K Free)</p>
+                <button onclick="alert('Meow! 🐾')" style="padding: 4px 12px; cursor: pointer;">Pet System</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- START MENU -->
+    <div id="start-menu">
+        <div class="start-item" onclick="openWindow('win-terminal'); toggleStart();">💻 CatTerm</div>
+        <div class="start-item" onclick="openWindow('win-notepad'); toggleStart();">📝 Scratchpad</div>
+        <div class="start-item" onclick="openWindow('win-about'); toggleStart();">🐱 About CatOS</div>
+        <hr style="width: 90%; border: 1px inset var(--win-gray);">
+        <div class="start-item" onclick="location.reload()">🔄 Reboot</div>
+    </div>
+
+    <!-- TASKBAR -->
+    <div id="taskbar">
+        <button id="start-btn" onclick="toggleStart()">🐱 Start</button>
+        <div id="clock">12:00 PM</div>
+    </div>
+
+    <script>
+        // --- BOOT SEQUENCE ---
+        const bootLines = [
+            "CAT-BIOS v1.10 (C) 2026 Feline Systems Inc.",
+            "Checking Catnip RAM... 640KB OK",
+            "Detecting Primary Master... Whiskers HDD 20MB",
+            "Loading CatOS 1.00 Build 110...",
+            "Initializing Purr-Engine... [OK]",
+            "Starting Graphical User Interface..."
+        ];
+
+        const bootScreen = document.getElementById('boot-screen');
+        let lineIdx = 0;
+
+        function runBoot() {
+            if (lineIdx < bootLines.length) {
+                const p = document.createElement('div');
+                p.className = 'boot-line';
+                p.textContent = bootLines[lineIdx];
+                bootScreen.appendChild(p);
+                lineIdx++;
+                setTimeout(runBoot, 400);
+            } else {
+                setTimeout(() => {
+                    bootScreen.style.display = 'none';
+                    document.getElementById('desktop').style.display = 'block';
+                    document.getElementById('taskbar').style.display = 'flex';
+                    openWindow('win-terminal');
+                }, 600);
+            }
+        }
+        runBoot();
+
+        // --- WINDOW MANAGEMENT ---
+        let zIndexCounter = 10;
+
+        function openWindow(id) {
+            const win = document.getElementById(id);
+            win.style.display = 'flex';
+            win.style.zIndex = ++zIndexCounter;
+            if(id === 'win-terminal') document.getElementById('term-input').focus();
+        }
+
+        function closeWindow(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // Dragging logic
+        let activeWin = null, offsetX = 0, offsetY = 0;
+
+        function dragStart(e, id) {
+            activeWin = document.getElementById(id);
+            activeWin.style.zIndex = ++zIndexCounter;
+            offsetX = e.clientX - activeWin.offsetLeft;
+            offsetY = e.clientY - activeWin.offsetTop;
+            document.onmousemove = dragMove;
+            document.onmouseup = dragEnd;
+        }
+
+        function dragMove(e) {
+            if (!activeWin) return;
+            activeWin.style.left = (e.clientX - offsetX) + 'px';
+            activeWin.style.top = (e.clientY - offsetY) + 'px';
+        }
+
+        function dragEnd() {
+            activeWin = null;
+            document.onmousemove = null;
+            document.onmouseup = null;
+        }
+
+        // --- START MENU & CLOCK ---
+        function toggleStart() {
+            const menu = document.getElementById('start-menu');
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- TERMINAL COMMANDS ---
+        function handleTerminal(e) {
+            if (e.key === 'Enter') {
+                const input = document.getElementById('term-input');
+                const output = document.getElementById('terminal-output');
+                const cmd = input.value.trim().toLowerCase();
+                
+                output.innerHTML += `<div>C:\\CAT&gt; ${input.value}</div>`;
+                input.value = '';
+
+                let response = "";
+                switch(cmd) {
+                    case 'help':
+                        response = "Available commands: help, ver, meow, clear, date, reboot";
+                        break;
+                    case 'ver':
+                        response = "CatOS 1.00 [Build 110]";
+                        break;
+                    case 'meow':
+                        response = " /\\_/\\  <br>( o.o )  Meow!<br> &gt; ^ &lt;";
+                        break;
+                    case 'date':
+                        response = new Date().toDateString();
+                        break;
+                    case 'clear':
+                        output.innerHTML = "";
+                        return;
+                    case 'reboot':
+                        location.reload();
+                        return;
+                    case '':
+                        break;
+                    default:
+                        response = `'${cmd}' is not recognized as an internal or external command.`;
+                }
+
+                if (response) {
+                    output.innerHTML += `<div style="margin-bottom: 8px;">${response}</div>`;
+                }
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+    </script>
+</body>
+</html>

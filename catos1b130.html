@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CatOS 1.00 Build 130</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; font-family: 'Tahoma', sans-serif; background-color: #008080;
+            user-select: none; -webkit-user-select: none; touch-action: none;
+        }
+        #desktop { width: 100%; height: calc(100% - 40px); position: relative; padding: 20px; }
+        .icon { width: 80px; text-align: center; color: white; margin-bottom: 20px; cursor: pointer; font-size: 13px; text-shadow: 1px 1px #000; }
+        .icon span { font-size: 36px; display: block; margin-bottom: 4px; }
+        .window {
+            position: absolute; top: 25px; left: 5%; width: 90%; max-width: 400px;
+            background: #c0c0c0; border: 2px solid; border-color: #fff #000 #000 #fff;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 10;
+        }
+        .title-bar { background: #000080; color: white; padding: 6px; font-weight: bold; font-size: 14px; display: flex; justify-content: space-between; align-items: center; cursor: move; }
+        .title-bar button { background: #c0c0c0; border: 1px solid; border-color: #fff #000 #000 #fff; width: 22px; height: 22px; font-weight: bold; cursor: pointer; }
+        .window-body { padding: 10px; display: flex; flex-direction: column; }
+        .retro-btn { background: #c0c0c0; border: 2px solid; border-color: #fff #000 #000 #fff; padding: 4px 10px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 6px; }
+        .retro-btn:active { border-color: #000 #fff #fff #000; }
+        #terminal-output { background: #000; color: #0f0; font-family: 'Courier New', monospace; font-size: 13px; height: 150px; padding: 6px; overflow-y: auto; user-select: text; -webkit-user-select: text; }
+        .term-line { display: flex; background: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 4px; align-items: center; }
+        #term-input { background: transparent; border: none; color: #0f0; font-family: 'Courier New', monospace; font-size: 14px; flex-grow: 1; outline: none; user-select: text; -webkit-user-select: text; }
+        #notepad-text { width: 100%; height: 150px; resize: none; font-family: 'Courier New', monospace; font-size: 13px; border: 2px inset #c0c0c0; padding: 6px; outline: none; user-select: text; -webkit-user-select: text; }
+        #taskbar {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 40px;
+            background: #c0c0c0; border-top: 2px solid #fff; display: flex; align-items: center; padding: 0 8px; justify-content: space-between; z-index: 1000;
+        }
+        #start-btn { background: #c0c0c0; border: 2px solid; border-color: #fff #000 #000 #fff; padding: 4px 12px; font-weight: bold; cursor: pointer; }
+        #start-menu {
+            position: fixed; bottom: 40px; left: 8px; width: 180px; background: #c0c0c0;
+            border: 2px solid; border-color: #fff #000 #000 #fff; display: none; flex-direction: column; z-index: 1001;
+        }
+        .start-item { padding: 10px 12px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .start-item:hover { background: #000080; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="desktop">
+        <div class="icon" onclick="openWindow('win-terminal')">
+            <span>💻</span>CatTerm
+        </div>
+        <div class="icon" onclick="openWindow('win-notepad')">
+            <span>📝</span>Scratchpad
+        </div>
+        <div class="icon" onclick="openWindow('win-about')">
+            <span>🐱</span>About
+        </div>
+
+        <!-- TERMINAL WINDOW -->
+        <div class="window" id="win-terminal" style="display:flex;">
+            <div class="title-bar" onmousedown="bringToFront('win-terminal')" ontouchstart="bringToFront('win-terminal')">
+                <span>CatTerm - [Build 130]</span>
+                <button onclick="closeWindow('win-terminal')">X</button>
+            </div>
+            <div class="window-body">
+                <div id="terminal-output">
+                    CatOS Shell v1.00 (Build 130)<br>
+                    Type 'help' for commands.<br><br>
+                </div>
+                <div class="term-line">
+                    <span>C:\&gt;</span>
+                    <input type="text" id="term-input" autocomplete="off" onkeydown="handleTerm(event)">
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTEPAD WINDOW -->
+        <div class="window" id="win-notepad">
+            <div class="title-bar" onmousedown="bringToFront('win-notepad')" ontouchstart="bringToFront('win-notepad')">
+                <span>Scratchpad.txt</span>
+                <button onclick="closeWindow('win-notepad')">X</button>
+            </div>
+            <div class="window-body">
+                <textarea id="notepad-text" placeholder="Type your notes here..."></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <button class="retro-btn" onclick="saveNote()">💾 Save Note</button>
+                    <span id="save-status" style="font-size: 12px; color: #006400; font-weight: bold;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABOUT WINDOW -->
+        <div class="window" id="win-about" style="top: 50px;">
+            <div class="title-bar" onmousedown="bringToFront('win-about')" ontouchstart="bringToFront('win-about')">
+                <span>System Properties</span>
+                <button onclick="closeWindow('win-about')">X</button>
+            </div>
+            <div class="window-body" style="text-align: center;">
+                <div style="font-size: 40px; margin: 10px;">🐱</div>
+                <strong>CatOS 1.00 (Build 130)</strong>
+                <p style="font-size: 13px;">Purr-formance Kernel v1.3<br>Notepad & Terminal Fully Restored!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- START MENU -->
+    <div id="start-menu">
+        <div class="start-item" onclick="openWindow('win-terminal'); toggleStart();">💻 CatTerm</div>
+        <div class="start-item" onclick="openWindow('win-notepad'); toggleStart();">📝 Scratchpad</div>
+        <div class="start-item" onclick="openWindow('win-about'); toggleStart();">🐱 About CatOS</div>
+        <hr style="width: 90%; border: 1px inset #c0c0c0;">
+        <div class="start-item" onclick="location.reload()">🔄 Reboot</div>
+    </div>
+
+    <div id="taskbar">
+        <button id="start-btn" onclick="toggleStart()">🐱 Start</button>
+        <div id="clock" style="border: 2px inset #c0c0c0; padding: 3px 8px; font-size: 12px;">12:00 PM</div>
+    </div>
+
+    <script>
+        let zIndexCounter = 10;
+
+        function openWindow(id) {
+            const win = document.getElementById(id);
+            win.style.display = 'flex';
+            bringToFront(id);
+        }
+
+        function closeWindow(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function bringToFront(id) {
+            document.getElementById(id).style.zIndex = ++zIndexCounter;
+        }
+
+        function toggleStart() {
+            const menu = document.getElementById('start-menu');
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function saveNote() {
+            const text = document.getElementById('notepad-text').value;
+            try {
+                localStorage.setItem('catos_note', text);
+                const status = document.getElementById('save-status');
+                status.textContent = "Saved!";
+                setTimeout(() => status.textContent = "", 2000);
+            } catch(e) {}
+        }
+
+        function loadNote() {
+            try {
+                const saved = localStorage.getItem('catos_note');
+                if (saved) document.getElementById('notepad-text').value = saved;
+            } catch(e) {}
+        }
+        loadNote();
+
+        function handleTerm(e) {
+            if (e.key === 'Enter') {
+                const input = document.getElementById('term-input');
+                const output = document.getElementById('terminal-output');
+                const cmd = input.value.trim().toLowerCase();
+                
+                output.innerHTML += `<div>C:\\&gt; ${input.value}</div>`;
+                input.value = '';
+
+                let resp = "";
+                if (cmd === 'help') resp = "Commands: help, ver, meow, notepad, clear, reboot";
+                else if (cmd === 'ver') resp = "CatOS Build 130";
+                else if (cmd === 'meow') resp = "Meow! 🐾";
+                else if (cmd === 'notepad') { openWindow('win-notepad'); resp = "Opening Scratchpad..."; }
+                else if (cmd === 'clear') { output.innerHTML = ""; return; }
+                else if (cmd === 'reboot') { location.reload(); return; }
+                else resp = `Command not recognized: ${cmd}`;
+
+                output.innerHTML += `<div style="margin-bottom:6px;">${resp}</div>`;
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        // Live Clock
+        setInterval(() => {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }, 1000);
+    </script>
+</body>
+</html>

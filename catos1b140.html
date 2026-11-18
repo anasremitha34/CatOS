@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CatOS 1.00 Build 140</title>
+    <style>
+        :root {
+            --bg-color: #008080;
+            --win-gray: #c0c0c0;
+            --win-light: #ffffff;
+            --win-blue: #000080;
+            --font-mono: 'Courier New', Courier, monospace;
+            --font-sans: 'Tahoma', 'Arial', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-sans);
+            background-color: #000;
+            touch-action: none;
+        }
+
+        /* --- BOOT SCREEN --- */
+        #boot-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .boot-line { margin: 4px 0; font-size: 14px; }
+
+        /* --- DESKTOP --- */
+        #desktop {
+            display: none;
+            width: 100%;
+            height: calc(100% - 40px);
+            background-color: var(--bg-color);
+            position: relative;
+            padding: 20px;
+        }
+
+        .icon {
+            width: 80px;
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            text-shadow: 1px 1px #000;
+        }
+
+        .icon span {
+            font-size: 36px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* --- WINDOWS --- */
+        .window {
+            position: absolute;
+            top: 25px;
+            left: 5%;
+            width: 90%;
+            max-width: 420px;
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .title-bar {
+            background: var(--win-blue);
+            color: white;
+            padding: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            touch-action: none;
+        }
+
+        .title-bar button {
+            background: var(--win-gray);
+            border: 1px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            width: 22px;
+            height: 22px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .window-body {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .retro-btn {
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            padding: 4px 10px;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .retro-btn:active {
+            border-color: #000 var(--win-light) var(--win-light) #000;
+        }
+
+        /* --- TERMINAL --- */
+        #terminal-output {
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            height: 160px;
+            padding: 6px;
+            overflow-y: auto;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .term-line {
+            display: flex;
+            background: #000;
+            color: #0f0;
+            font-family: var(--font-mono);
+            padding: 4px;
+            align-items: center;
+        }
+
+        #term-input {
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            flex-grow: 1;
+            outline: none;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* --- NOTEPAD --- */
+        #notepad-text {
+            width: 100%;
+            height: 150px;
+            resize: none;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            border: 2px inset var(--win-gray);
+            padding: 6px;
+            outline: none;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* --- TASKBAR & START MENU --- */
+        #taskbar {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%; height: 40px;
+            background: var(--win-gray);
+            border-top: 2px solid var(--win-light);
+            display: none;
+            align-items: center;
+            padding: 0 8px;
+            justify-content: space-between;
+            z-index: 1000;
+        }
+
+        #start-btn {
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            padding: 4px 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #start-menu {
+            position: fixed;
+            bottom: 40px; left: 8px; width: 190px;
+            background: var(--win-gray);
+            border: 2px solid;
+            border-color: var(--win-light) #000 #000 var(--win-light);
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        .start-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .start-item:hover {
+            background: var(--win-blue);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BOOT SCREEN -->
+    <div id="boot-screen"></div>
+
+    <!-- DESKTOP -->
+    <div id="desktop">
+        <div class="icon" onclick="openWindow('win-terminal')">
+            <span>💻</span>CatTerm
+        </div>
+        <div class="icon" onclick="openWindow('win-notepad')">
+            <span>📝</span>Scratchpad
+        </div>
+        <div class="icon" onclick="openWindow('win-about')">
+            <span>🐱</span>About
+        </div>
+
+        <!-- TERMINAL WINDOW -->
+        <div class="window" id="win-terminal">
+            <div class="title-bar" onmousedown="bringToFront('win-terminal')" ontouchstart="bringToFront('win-terminal')">
+                <span>CatTerm - [Build 140]</span>
+                <button onclick="closeWindow('win-terminal')">X</button>
+            </div>
+            <div class="window-body">
+                <div id="terminal-output">
+                    CatOS Shell v1.00 (Build 140)<br>
+                    Type 'help' for commands, or 'fetch [url]' to download files.<br><br>
+                </div>
+                <div class="term-line">
+                    <span>C:\&gt;</span>
+                    <input type="text" id="term-input" autocomplete="off" onkeydown="handleTerm(event)">
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTEPAD WINDOW -->
+        <div class="window" id="win-notepad">
+            <div class="title-bar" onmousedown="bringToFront('win-notepad')" ontouchstart="bringToFront('win-notepad')">
+                <span>Scratchpad.txt</span>
+                <button onclick="closeWindow('win-notepad')">X</button>
+            </div>
+            <div class="window-body">
+                <textarea id="notepad-text" placeholder="Type your notes here..."></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <button class="retro-btn" onclick="saveNote()">💾 Save Note</button>
+                    <span id="save-status" style="font-size: 12px; color: #006400; font-weight: bold;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABOUT WINDOW -->
+        <div class="window" id="win-about" style="top: 50px;">
+            <div class="title-bar" onmousedown="bringToFront('win-about')" ontouchstart="bringToFront('win-about')">
+                <span>System Properties</span>
+                <button onclick="closeWindow('win-about')">X</button>
+            </div>
+            <div class="window-body" style="text-align: center;">
+                <div style="font-size: 40px; margin: 10px;">🐱</div>
+                <strong>CatOS 1.00 (Build 140)</strong>
+                <p style="font-size: 13px;">Purr-formance Kernel v1.4<br>Terminal Fetch & Real Reboot Enabled!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- START MENU -->
+    <div id="start-menu">
+        <div class="start-item" onclick="openWindow('win-terminal'); toggleStart();">💻 CatTerm</div>
+        <div class="start-item" onclick="openWindow('win-notepad'); toggleStart();">📝 Scratchpad</div>
+        <div class="start-item" onclick="openWindow('win-about'); toggleStart();">🐱 About CatOS</div>
+        <hr style="width: 90%; border: 1px inset var(--win-gray);">
+        <div class="start-item" onclick="toggleStart(); rebootSystem();">🔄 Reboot</div>
+    </div>
+
+    <!-- TASKBAR -->
+    <div id="taskbar">
+        <button id="start-btn" onclick="toggleStart()">🐱 Start</button>
+        <div id="clock" style="border: 2px inset var(--win-gray); padding: 3px 8px; font-size: 12px;">12:00 PM</div>
+    </div>
+
+    <script>
+        // --- BOOT SEQUENCE & REBOOT SYSTEM ---
+        const bootLines = [
+            "CAT-BIOS v1.40 (C) 2026 Feline Systems Inc.",
+            "Checking Catnip RAM... 640KB OK",
+            "Detecting Primary Master... Whiskers HDD 20MB",
+            "Loading CatOS 1.00 Build 140...",
+            "Mounting Persistent Storage... [OK]",
+            "Initializing CatTerm & Fetch Protocol... [OK]"
+        ];
+
+        let lineIdx = 0;
+        let bootStarted = false;
+
+        function runBoot() {
+            if (bootStarted) return;
+            bootStarted = true;
+
+            const bootScreen = document.getElementById('boot-screen');
+            bootScreen.style.display = 'flex';
+            bootScreen.innerHTML = '';
+            lineIdx = 0;
+
+            function nextLine() {
+                if (lineIdx < bootLines.length) {
+                    const p = document.createElement('div');
+                    p.className = 'boot-line';
+                    p.textContent = bootLines[lineIdx];
+                    bootScreen.appendChild(p);
+                    lineIdx++;
+                    setTimeout(nextLine, 40);
+                } else {
+                    setTimeout(() => {
+                        bootScreen.style.display = 'none';
+                        document.getElementById('desktop').style.display = 'block';
+                        document.getElementById('taskbar').style.display = 'flex';
+                        loadNote();
+                        openWindow('win-terminal');
+                    }, 100);
+                }
+            }
+            nextLine();
+        }
+
+        function rebootSystem() {
+            document.getElementById('desktop').style.display = 'none';
+            document.getElementById('taskbar').style.display = 'none';
+            document.querySelectorAll('.window').forEach(w => w.style.display = 'none');
+            bootStarted = false;
+            runBoot();
+        }
+
+        window.onload = runBoot;
+        setTimeout(runBoot, 200);
+
+        // --- WINDOW MANAGEMENT ---
+        let zIndexCounter = 10;
+
+        function openWindow(id) {
+            const win = document.getElementById(id);
+            win.style.display = 'flex';
+            bringToFront(id);
+        }
+
+        function closeWindow(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function bringToFront(id) {
+            document.getElementById(id).style.zIndex = ++zIndexCounter;
+        }
+
+        function toggleStart() {
+            const menu = document.getElementById('start-menu');
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        // --- SCRATCHPAD STORAGE ---
+        function saveNote() {
+            const text = document.getElementById('notepad-text').value;
+            try {
+                localStorage.setItem('catos_note', text);
+                const status = document.getElementById('save-status');
+                status.textContent = "Saved!";
+                setTimeout(() => status.textContent = "", 2000);
+            } catch(e) {}
+        }
+
+        function loadNote() {
+            try {
+                const saved = localStorage.getItem('catos_note');
+                if (saved) document.getElementById('notepad-text').value = saved;
+            } catch(e) {}
+        }
+
+        // --- TERMINAL & FETCH SUPPORT ---
+        function handleTerm(e) {
+            if (e.key === 'Enter') {
+                const input = document.getElementById('term-input');
+                const output = document.getElementById('terminal-output');
+                const rawCmd = input.value.trim();
+                const cmdLower = rawCmd.toLowerCase();
+                
+                output.innerHTML += `<div>C:\\&gt; ${rawCmd}</div>`;
+                input.value = '';
+
+                let resp = "";
+                if (cmdLower === 'help') {
+                    resp = "Commands: help, ver, meow, dir, fetch [url], notepad, clear, reboot";
+                } else if (cmdLower === 'ver') {
+                    resp = "CatOS Build 140";
+                } else if (cmdLower === 'meow') {
+                    resp = " /\\_/\\<br>( o.o ) Meow!<br> &gt; ^ &lt;";
+                } else if (cmdLower === 'dir') {
+                    resp = "Directory of C:\\CAT<br><br>DOWNLOADS &lt;DIR&gt;<br>SYSTEM    &lt;DIR&gt;<br>CATFETCH  EXE<br>NOTEPAD   EXE";
+                } else if (cmdLower.startsWith('fetch ')) {
+                    const fetchUrl = rawCmd.split(' ')[1] || "cat://files/unknown";
+                    resp = `Connecting to ${fetchUrl}...<br>&gt; Resolving host... [OK]<br>&gt; Downloading package...<br><span style="color:#fff;">[SUCCESS] Saved file to C:\\CAT\\DOWNLOADS</span>`;
+                } else if (cmdLower === 'fetch') {
+                    resp = "Usage: fetch [url] (e.g., fetch cat://files/catpaint.exe)";
+                } else if (cmdLower === 'notepad') {
+                    openWindow('win-notepad');
+                    resp = "Opening Scratchpad...";
+                } else if (cmdLower === 'clear') {
+                    output.innerHTML = "";
+                    return;
+                } else if (cmdLower === 'reboot') {
+                    output.innerHTML += `<div>Rebooting system...</div>`;
+                    setTimeout(rebootSystem, 600);
+                    return;
+                } else if (cmdLower === '') {
+                    resp = "";
+                } else {
+                    resp = `'${rawCmd}' is not recognized as an internal or external command.`;
+                }
+
+                if (resp) {
+                    output.innerHTML += `<div style="margin-bottom:6px;">${resp}</div>`;
+                }
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        // --- LIVE CLOCK ---
+        setInterval(() => {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }, 1000);
+    </script>
+</body>
+</html>
